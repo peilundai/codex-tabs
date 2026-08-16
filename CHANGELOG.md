@@ -1,0 +1,65 @@
+# Changelog
+
+All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+## [0.2.4] - 2026-08-16
+
+### Fixed
+
+- Use a tightly fitted transparent Codex cloud mark for editor tabs and the
+  toolbar command while retaining the full light app tile for Marketplace.
+
+## [0.2.3] - 2026-08-16
+
+### Fixed
+
+- Enlarge the light and dark Codex icon artwork within its canvas so it matches
+  the visual size of neighboring VS Code and Marketplace icons.
+
+## [0.2.2] - 2026-08-16
+
+### Fixed
+
+- Resolve Codex's truncated terminal-title session identifiers without exposing
+  UUID prefixes in VS Code tab names.
+- Require truncated identifiers to match one unique local metadata row and
+  suppress UUID-shaped titles at both terminal-title boundaries.
+
+## [0.2.1] - 2026-08-16
+
+### Fixed
+
+- Show `Codex CLI` instead of a thread UUID before a session has a title.
+- Follow the generated or explicit title of new, resumed, forked, renamed, and
+  in-TUI-switched sessions through bounded read-only Codex metadata lookup.
+
+## [0.2.0] - 2026-08-16
+
+### Added
+
+- Automatic VS Code tab renaming when Codex generates or changes the current
+  thread name.
+- Distinct Codex app artwork for Marketplace and theme-aware tab icons.
+
+## [0.1.0] - 2026-08-16
+
+### Added
+
+- Multiple independent Codex CLI sessions in reusable editor-area tabs.
+- Native Codex `resume` and `fork` pickers in new tabs.
+- File and folder insertion through context menus, editor moves, and verified
+  path drops.
+- Cross-platform launch planning with a dependency-free optional Unix PTY
+  adapter and native-terminal fallback.
+- Automated tests, package validation, architecture documentation, and explicit
+  workspace trust restrictions.
+
+[Unreleased]: https://github.com/peilundai/codex-tabs/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/peilundai/codex-tabs/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/peilundai/codex-tabs/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/peilundai/codex-tabs/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/peilundai/codex-tabs/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/peilundai/codex-tabs/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/peilundai/codex-tabs/releases/tag/v0.1.0

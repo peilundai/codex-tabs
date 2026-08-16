@@ -1,0 +1,12 @@
+Third-party notices
+===================
+
+This Visual Studio Code extension is independent software. It launches a
+separately installed Codex CLI and does not bundle, fork, or redistribute that
+CLI.
+
+Codex and OpenAI are trademarks or trade names of OpenAI. Their use identifies
+the compatible CLI and does not imply affiliation, endorsement, or sponsorship.
+The Codex icon artwork is sourced from the official OpenAI Codex app and is
+used only to identify compatibility with Codex. All rights in that artwork
+belong to OpenAI.

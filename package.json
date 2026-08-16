@@ -1,0 +1,140 @@
+{
+  "name": "codex-cli-tabs",
+  "displayName": "Codex CLI Tabs",
+  "description": "Open multiple independent Codex CLI sessions in focused VS Code editor tabs.",
+  "version": "0.2.4",
+  "publisher": "peilundai",
+  "author": { "name": "Peilun Dai" },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/peilundai/codex-tabs.git" },
+  "homepage": "https://github.com/peilundai/codex-tabs#readme",
+  "bugs": { "url": "https://github.com/peilundai/codex-tabs/issues" },
+  "pricing": "Free",
+  "icon": "media/codex-icon-light.png",
+  "galleryBanner": { "color": "#0d1117", "theme": "dark" },
+  "keywords": ["codex", "codex cli", "openai", "coding agent", "terminal", "chat", "tabs"],
+  "engines": { "vscode": "^1.85.0" },
+  "extensionKind": ["workspace"],
+  "activationEvents": [
+    "onCommand:codexTabs.open",
+    "onCommand:codexTabs.newChat",
+    "onCommand:codexTabs.resumeChat",
+    "onCommand:codexTabs.forkChat",
+    "onCommand:codexTabs.insertPath"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Codex CLI can access files and run processes. Open the workspace only when you trust its contents."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "The extension launches a local or remote Codex CLI process and requires a filesystem-backed working directory."
+    }
+  },
+  "categories": ["Chat", "Other"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "codexTabs.open", "title": "Open Agent", "category": "Codex Tabs" },
+      {
+        "command": "codexTabs.newChat",
+        "title": "New Agent Chat",
+        "category": "Codex Tabs",
+        "icon": {
+          "light": "media/codex-tab-icon-light.png",
+          "dark": "media/codex-tab-icon.png"
+        }
+      },
+      { "command": "codexTabs.resumeChat", "title": "Resume Chat…", "category": "Codex Tabs" },
+      { "command": "codexTabs.forkChat", "title": "Fork Chat…", "category": "Codex Tabs" },
+      { "command": "codexTabs.insertPath", "title": "Insert into Chat", "category": "Codex Tabs" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "codexTabs.newChat", "group": "navigation" }
+      ],
+      "explorer/context": [
+        {
+          "command": "codexTabs.insertPath",
+          "group": "navigation@90",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "codexTabs.insertPath",
+          "group": "navigation@90",
+          "when": "resourceScheme == file || resourceScheme == vscode-remote"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Codex CLI Tabs",
+      "properties": {
+        "codexTabs.command": {
+          "type": "string",
+          "default": "codex",
+          "scope": "window",
+          "description": "Codex executable to run. The value is treated as one executable name or path, not as shell syntax."
+        },
+        "codexTabs.args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "window",
+          "description": "Extra global arguments passed to Codex CLI, for example [\"--model\", \"gpt-5.6-terra\"] or [\"--no-alt-screen\"]."
+        },
+        "codexTabs.cwdMode": {
+          "type": "string",
+          "enum": ["auto", "workspaceRoot", "prompt"],
+          "enumDescriptions": [
+            "Use the active editor's workspace folder when possible, otherwise the first folder.",
+            "Always use the first workspace folder.",
+            "Ask which workspace folder to use when more than one is open."
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "description": "How Codex Tabs chooses the working directory."
+        },
+        "codexTabs.launchMode": {
+          "type": "string",
+          "enum": ["loginShell", "profile"],
+          "enumDescriptions": [
+            "Run Codex through a login shell on macOS/Linux or directly on Windows. Recommended.",
+            "Use the default VS Code terminal profile, then send the Codex command as text."
+          ],
+          "default": "loginShell",
+          "scope": "window",
+          "description": "How the Codex process is started."
+        },
+        "codexTabs.titleMaxLength": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 80,
+          "default": 28,
+          "scope": "window",
+          "description": "Maximum number of characters shown for a Codex session title on macOS and Linux."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src test",
+    "test": "tsc -p tsconfig.test.json && node --test .test-out/test/*.test.js",
+    "check": "npm run lint && npm test && npm run compile",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "@types/node": "^22.10.1",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "^3.2.2",
+    "eslint": "^9.16.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.17.0"
+  }
+}
