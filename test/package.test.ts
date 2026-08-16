@@ -31,12 +31,8 @@ test("the publication manifest declares source, license, and safe workspace limi
   assert.deepEqual(manifest.dependencies ?? {}, {});
 });
 
-test("every contributed command has a matching activation event", () => {
-  const commands = manifest.contributes.commands.map((item) => item.command);
-  assert.deepEqual(
-    new Set(manifest.activationEvents),
-    new Set(commands.map((command) => `onCommand:${command}`)),
-  );
+test("contributed commands rely on generated activation events", () => {
+  assert.equal(manifest.activationEvents, undefined);
 });
 
 test("the New Chat command ships a theme-aware Codex icon", () => {
