@@ -24,6 +24,7 @@ import tty
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, cast
 from urllib.parse import unquote, urlparse
 
 try:
@@ -74,15 +75,26 @@ class Options:
     command: list[str]
 
 
+class _ParsedNamespace(Protocol):
+    cwd: str | None
+    columns: int
+    rows: int
+    control_fd: int | None
+    title_max_length: int
+    rewrite_input_only: bool
+    rewrite_output_only: bool
+    command: list[str]
+
+
 def main(argv: list[str]) -> int:
     options = parse_options(argv[1:])
     if options.rewrite_input_only:
-        sys.stdout.buffer.write(rewrite_input(sys.stdin.buffer.read(), options.cwd))
+        _ = sys.stdout.buffer.write(rewrite_input(sys.stdin.buffer.read(), options.cwd))
         return 0
     if options.rewrite_output_only:
         transformer = OscTitleTransformer(options.title_max_length)
-        sys.stdout.buffer.write(transformer.feed(sys.stdin.buffer.read()))
-        sys.stdout.buffer.write(transformer.flush())
+        _ = sys.stdout.buffer.write(transformer.feed(sys.stdin.buffer.read()))
+        _ = sys.stdout.buffer.write(transformer.flush())
         return 0
     if not options.command:
         print("codex-pty-bridge: missing command after --", file=sys.stderr)
@@ -92,30 +104,32 @@ def main(argv: list[str]) -> int:
 
 def parse_options(argv: list[str]) -> Options:
     parser = argparse.ArgumentParser(prog="codex-pty-bridge")
-    parser.add_argument("--cwd")
-    parser.add_argument("--columns", type=positive_integer, default=80)
-    parser.add_argument("--rows", type=positive_integer, default=24)
-    parser.add_argument("--control-fd", type=int)
-    parser.add_argument(
-        "--title-max-length",
-        type=lambda value: max(8, min(80, int(value))),
-        default=DEFAULT_TITLE_MAX_LENGTH,
+    _ = (
+        parser.add_argument("--cwd"),
+        parser.add_argument("--columns", type=positive_integer, default=80),
+        parser.add_argument("--rows", type=positive_integer, default=24),
+        parser.add_argument("--control-fd", type=int),
+        parser.add_argument(
+            "--title-max-length",
+            type=clamp_title_max_length,
+            default=DEFAULT_TITLE_MAX_LENGTH,
+        ),
+        parser.add_argument("--rewrite-input-only", action="store_true"),
+        parser.add_argument("--rewrite-output-only", action="store_true"),
+        parser.add_argument("command", nargs=argparse.REMAINDER),
     )
-    parser.add_argument("--rewrite-input-only", action="store_true")
-    parser.add_argument("--rewrite-output-only", action="store_true")
-    parser.add_argument("command", nargs=argparse.REMAINDER)
-    namespace = parser.parse_args(argv)
-    command = namespace.command
+    parsed = cast(_ParsedNamespace, cast(object, parser.parse_args(argv)))
+    command = parsed.command
     if command[:1] == ["--"]:
         command = command[1:]
     return Options(
-        cwd=namespace.cwd,
-        columns=namespace.columns,
-        rows=namespace.rows,
-        control_fd=namespace.control_fd,
-        title_max_length=namespace.title_max_length,
-        rewrite_input_only=namespace.rewrite_input_only,
-        rewrite_output_only=namespace.rewrite_output_only,
+        cwd=parsed.cwd,
+        columns=parsed.columns,
+        rows=parsed.rows,
+        control_fd=parsed.control_fd,
+        title_max_length=parsed.title_max_length,
+        rewrite_input_only=parsed.rewrite_input_only,
+        rewrite_output_only=parsed.rewrite_output_only,
         command=command,
     )
 
@@ -125,6 +139,10 @@ def positive_integer(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be positive")
     return parsed
+
+
+def clamp_title_max_length(value: str) -> int:
+    return max(8, min(80, int(value)))
 
 
 def rewrite_input(data: bytes, cwd: str | None) -> bytes:
@@ -373,15 +391,15 @@ def codex_title(raw: str, maximum_length: int) -> str | None:
 
 class SessionTitleResolver:
     def __init__(self, maximum_length: int) -> None:
-        self.maximum_length = maximum_length
-        self.codex_home = Path(
+        self.maximum_length: int = maximum_length
+        self.codex_home: Path = Path(
             os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
         )
         self.thread_id: str | None = None
         self.thread_id_prefix: str | None = None
         self.explicit_name: str | None = None
-        self.display_title = DEFAULT_TITLE
-        self.next_poll_at = float("inf")
+        self.display_title: str = DEFAULT_TITLE
+        self.next_poll_at: float = float("inf")
         self.database_path: Path | None = None
 
     def observe(self, parsed: CodexTitle) -> str:
@@ -429,7 +447,7 @@ class SessionTitleResolver:
             else DEFAULT_TITLE
         )
 
-    def _read_metadata(self) -> "ThreadTitleMetadata | None":
+    def _read_metadata(self) -> ThreadTitleMetadata | None:
         if sqlite3 is None:
             return None
         matches: dict[str, tuple[Path, ThreadTitleMetadata]] = {}
@@ -445,7 +463,8 @@ class SessionTitleResolver:
                     self.database_path = None
                 continue
             for record in records:
-                matches.setdefault(record.thread_id, (database, record))
+                if record.thread_id not in matches:
+                    matches[record.thread_id] = (database, record)
                 if len(matches) > 1:
                     return None
         if len(matches) != 1:
@@ -491,9 +510,14 @@ def read_thread_titles(
     database_uri = database.resolve().as_uri() + "?mode=ro"
     connection = sqlite3.connect(database_uri, uri=True, timeout=0.05)
     try:
-        connection.execute("PRAGMA query_only = ON")
+        _ = connection.execute("PRAGMA query_only = ON")
+        column_rows = _sqlite_tuples(
+            connection.execute("PRAGMA table_info(threads)")
+        )
         columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(threads)")
+            row[1]
+            for row in column_rows
+            if len(row) > 1 and isinstance(row[1], str)
         }
         selected = [
             column
@@ -506,17 +530,21 @@ def read_thread_titles(
             f"substr({column}, 1, {MAX_METADATA_CHARS})" for column in selected
         )
         if thread_id:
-            rows = connection.execute(
-                f"SELECT substr(id, 1, {MAX_METADATA_CHARS}), {projections} "
-                "FROM threads WHERE id = ? LIMIT 1",
-                (thread_id,),
-            ).fetchall()
+            rows = _sqlite_tuples(
+                connection.execute(
+                    f"SELECT substr(id, 1, {MAX_METADATA_CHARS}), {projections}"
+                    + " FROM threads WHERE id = ? LIMIT 1",
+                    (thread_id,),
+                )
+            )
         elif thread_id_prefix:
-            rows = connection.execute(
-                f"SELECT substr(id, 1, {MAX_METADATA_CHARS}), {projections} "
-                "FROM threads WHERE substr(id, 1, ?) = ? LIMIT 2",
-                (len(thread_id_prefix), thread_id_prefix),
-            ).fetchall()
+            rows = _sqlite_tuples(
+                connection.execute(
+                    f"SELECT substr(id, 1, {MAX_METADATA_CHARS}), {projections}"
+                    + " FROM threads WHERE substr(id, 1, ?) = ? LIMIT 2",
+                    (len(thread_id_prefix), thread_id_prefix),
+                )
+            )
         else:
             return []
         records: list[ThreadTitleMetadata] = []
@@ -541,6 +569,14 @@ def read_thread_titles(
         connection.close()
 
 
+class _HasFetchall(Protocol):
+    def fetchall(self) -> list[tuple[object, ...]]: ...
+
+
+def _sqlite_tuples(cursor: object) -> list[tuple[object, ...]]:
+    return cast(_HasFetchall, cursor).fetchall()
+
+
 def osc_title(title: str) -> bytes:
     return OSC_START + b"0;" + title.encode("utf-8") + OSC_BEL
 
@@ -551,9 +587,9 @@ class OscTitleTransformer:
         maximum_length: int,
         resolver: SessionTitleResolver | None = None,
     ) -> None:
-        self.maximum_length = maximum_length
-        self.resolver = resolver
-        self.pending = b""
+        self.maximum_length: int = maximum_length
+        self.resolver: SessionTitleResolver | None = resolver
+        self.pending: bytes = b""
 
     def feed(self, data: bytes) -> bytes:
         buffer = self.pending + data
@@ -627,12 +663,14 @@ def rewrite_osc_title(
 
 class PtyRelay:
     def __init__(self, options: Options) -> None:
-        self.options = options
-        self.child_pid = -1
-        self.master_fd = -1
-        self.original_stdin_mode: list[object] | None = None
-        self.title_resolver = SessionTitleResolver(options.title_max_length)
-        self.transformer = OscTitleTransformer(
+        self.options: Options = options
+        self.child_pid: int = -1
+        self.master_fd: int = -1
+        self.original_stdin_mode: list[int | list[bytes | int]] | None = None
+        self.title_resolver: SessionTitleResolver = SessionTitleResolver(
+            options.title_max_length
+        )
+        self.transformer: OscTitleTransformer = OscTitleTransformer(
             options.title_max_length, self.title_resolver
         )
 
@@ -730,7 +768,7 @@ class PtyRelay:
 
     def _resize(self, columns: int, rows: int) -> None:
         packed = struct.pack("HHHH", rows, columns, 0, 0)
-        fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, packed)
+        _ = fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, packed)
         os.kill(self.child_pid, signal.SIGWINCH)
 
     def _install_signal_handlers(self) -> None:
@@ -740,13 +778,13 @@ class PtyRelay:
             except OSError:
                 pass
 
-        signal.signal(signal.SIGTERM, forward)
-        signal.signal(signal.SIGHUP, forward)
+        _ = signal.signal(signal.SIGTERM, forward)
+        _ = signal.signal(signal.SIGHUP, forward)
 
     def _enter_raw_mode(self) -> None:
         try:
             self.original_stdin_mode = termios.tcgetattr(sys.stdin.fileno())
-            tty.setraw(sys.stdin.fileno())
+            _ = tty.setraw(sys.stdin.fileno())
         except termios.error:
             self.original_stdin_mode = None
 
