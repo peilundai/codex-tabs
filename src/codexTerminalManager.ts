@@ -121,11 +121,7 @@ export class CodexTerminalManager implements vscode.Disposable {
     const launch = buildLaunchPlan(
       {
         ...configuration,
-        args: sessionArguments(
-          configuration.args,
-          action,
-          python ? "tracked" : "fallback",
-        ),
+        args: sessionArguments(configuration.args, action),
       },
       process.platform,
       process.env,

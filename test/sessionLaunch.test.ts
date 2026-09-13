@@ -1,29 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  FALLBACK_TITLE_ARGUMENTS,
-  sessionArguments,
-  TRACKED_TITLE_ARGUMENTS,
-} from "../src/sessionLaunch";
+import { sessionArguments } from "../src/sessionLaunch";
 
-test("tracked sessions request identity metadata before the thread title", () => {
+test("sessions preserve global arguments without title overrides", () => {
   const global = ["--model", "gpt-5.6-terra"];
-  const managed = [...global, ...TRACKED_TITLE_ARGUMENTS];
-  assert.deepEqual(sessionArguments(global, "new", "tracked"), managed);
-  assert.deepEqual(sessionArguments(global, "resume", "tracked"), [
-    ...managed,
+  assert.deepEqual(sessionArguments(global, "new"), global);
+  assert.deepEqual(sessionArguments(global, "resume"), [
+    ...global,
     "resume",
   ]);
-  assert.deepEqual(sessionArguments(global, "fork", "tracked"), [
-    ...managed,
-    "fork",
-  ]);
-});
-
-test("native fallback requests only the Codex app name", () => {
-  const global = ["--no-alt-screen"];
-  assert.deepEqual(sessionArguments(global, "new", "fallback"), [
+  assert.deepEqual(sessionArguments(global, "fork"), [
     ...global,
-    ...FALLBACK_TITLE_ARGUMENTS,
+    "fork",
   ]);
 });
