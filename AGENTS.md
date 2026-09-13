@@ -8,15 +8,20 @@ insertion, and the optional PTY adapter. Codex owns chats, persistence,
 authentication, permissions, models, tools, and network traffic. Do not add
 provider clients, telemetry, credential storage, or conversation storage.
 
-Before substantial changes, read `README.md`, `CONTRIBUTING.md`,
+## Development guidelines
+
+Before making substantial changes, read `README.md`, `CONTRIBUTING.md`,
 `docs/ARCHITECTURE.md`, `SECURITY.md`, and `NOTICE`.
 
-Use strict TypeScript, two-space indentation, double quotes, semicolons, and no
-new runtime dependencies without a clear need. Treat configured commands and
-arguments as data, never as shell fragments. Track managed sessions by concrete
-`vscode.Terminal` objects, not titles or process names.
+- Use strict TypeScript with two-space indentation, double quotes, and semicolons.
+- Do not add runtime dependencies unless clearly necessary.
+- Treat configured commands and arguments as data, never as shell fragments.
+- Track managed sessions by concrete `vscode.Terminal` objects, never by titles
+  or process names.
 
-After code or manifest changes, run:
+## Validation
+
+After changing code or the extension manifest, run:
 
 ```bash
 npm ci
