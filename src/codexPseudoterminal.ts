@@ -10,6 +10,13 @@ export interface PseudoterminalOptions extends BridgeLaunch {
   cwd?: string;
   environment: NodeJS.ProcessEnv;
   titleMaxLength: number;
+  /**
+   * Invoked when the child exits, before `onDidClose`.
+   * Return `"keep"` to leave the terminal open. Firing `onDidClose` first
+   * makes VS Code remove the terminal, and the manager then drops the session
+   * before it can preserve an immediate failure.
+   */
+  onProcessExit?: (exitCode: number) => "keep" | "close";
 }
 
 export class CodexPseudoterminal implements vscode.Pseudoterminal {
@@ -26,6 +33,8 @@ export class CodexPseudoterminal implements vscode.Pseudoterminal {
   private resizeControl: NodeJS.WritableStream | undefined;
   private oscCarry = "";
   private finished = false;
+  /** Set when VS Code disposes the terminal. That exit is not a startup failure. */
+  private closedByHost = false;
 
   constructor(private readonly options: PseudoterminalOptions) {}
 
@@ -89,6 +98,7 @@ export class CodexPseudoterminal implements vscode.Pseudoterminal {
 
   close(): void {
     if (!this.finished) {
+      this.closedByHost = true;
       this.child?.kill("SIGTERM");
     }
   }
@@ -120,7 +130,15 @@ export class CodexPseudoterminal implements vscode.Pseudoterminal {
       return;
     }
     this.finished = true;
-    this.closeEmitter.fire(exitCode);
+    // Host disposal already removes the terminal. A process exit must be
+    // classified first: `onDidClose` disposes the terminal and deletes the
+    // managed session before any later guard can preserve it.
+    const decision = this.closedByHost
+      ? "close"
+      : (this.options.onProcessExit?.(exitCode) ?? "close");
+    if (decision !== "keep") {
+      this.closeEmitter.fire(exitCode);
+    }
     this.writeEmitter.dispose();
     this.closeEmitter.dispose();
     this.nameEmitter.dispose();

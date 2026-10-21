@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 import { buildLaunchPlan } from "../src/launch";
 import {
@@ -30,7 +31,7 @@ test("Unix bare names stay deferred and missing absolute paths do not", () => {
   );
 });
 
-test("Windows loginShell prefers an exe and wraps a cmd shim without expansion", () => {
+test("Windows loginShell prefers an exe and quotes an unrecognized cmd shim", () => {
   assert.deepEqual(
     lookupCodexCommand(
       "codex",
@@ -68,7 +69,7 @@ test("Windows loginShell prefers an exe and wraps a cmd shim without expansion",
         "/d",
         "/s",
         "/c",
-        '"C:\\Tools\\codex.CMD --model "%%literal%%""',
+        '"C:\\Tools\\codex.CMD --model "%literal%""',
       ],
     },
   );
@@ -89,6 +90,126 @@ test("Windows loginShell prefers an exe and wraps a cmd shim without expansion",
     },
   );
 });
+
+test("Windows loginShell runs an npm cmd shim through node without percent expansion", () => {
+  const shim = [
+    "@ECHO off",
+    "GOTO start",
+    ":find_dp0",
+    "SET dp0=%~dp0",
+    "EXIT /b",
+    ":start",
+    "SETLOCAL",
+    "CALL :find_dp0",
+    'IF EXIST "%dp0%\\node.exe" (',
+    '  SET "_prog=%dp0%\\node.exe"',
+    ") ELSE (",
+    '  SET "_prog=node"',
+    "  SET PATHEXT=%PATHEXT:;.JS;=;%",
+    ")",
+    'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
+  ].join("\r\n");
+  const shimPath = "C:\\Tools\\codex.CMD";
+  const script = npmScript(shimPath);
+  const localNode = "C:\\Tools\\node.exe";
+  assert.deepEqual(
+    lookupCodexCommand(
+      "codex",
+      ["--model", "%PATH%"],
+      "loginShell",
+      "win32",
+      { PATH: "C:\\Tools;C:\\nodejs", PATHEXT: ".CMD;.EXE" },
+      (candidate) =>
+        candidate === shimPath ||
+        candidate === script ||
+        candidate === localNode ||
+        candidate === "C:\\nodejs\\node.EXE",
+      (filePath) => {
+        assert.equal(filePath, shimPath);
+        return shim;
+      },
+    ),
+    {
+      status: "direct",
+      executable: localNode,
+      args: [script, "--model", "%PATH%"],
+    },
+  );
+
+  const legacyShim = [
+    '@IF EXIST "%~dp0\\node.exe" (',
+    '  "%~dp0\\node.exe"  "%~dp0\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
+    ") ELSE (",
+    "  @SETLOCAL",
+    "  @SET PATHEXT=%PATHEXT:;.JS;=;%",
+    '  node  "%~dp0\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
+    ")",
+  ].join("\r\n");
+  const legacyPath = "C:\\Npm\\codex.cmd";
+  const legacyScript = npmScript(legacyPath);
+  assert.deepEqual(
+    lookupCodexCommand(
+      legacyPath,
+      ["--model", "%PATH%"],
+      "loginShell",
+      "win32",
+      { PATH: "C:\\nodejs", PATHEXT: ".EXE" },
+      (candidate) =>
+        candidate === legacyPath ||
+        candidate === legacyScript ||
+        candidate === "C:\\nodejs\\node.EXE",
+      () => legacyShim,
+    ),
+    {
+      status: "direct",
+      executable: "C:\\nodejs\\node.EXE",
+      args: [legacyScript, "--model", "%PATH%"],
+    },
+  );
+
+  const missingScript = lookupCodexCommand(
+    shimPath,
+    ["--model", "%PATH%"],
+    "loginShell",
+    "win32",
+    { PATH: "C:\\Tools", PATHEXT: ".CMD", ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+    (candidate) => candidate === shimPath,
+    () => shim,
+  );
+  assert.equal(missingScript.status, "cmdShim");
+  if (missingScript.status === "cmdShim") {
+    assert.equal(
+      missingScript.shellArgs[3],
+      '"C:\\Tools\\codex.CMD --model "%PATH%""',
+    );
+    assert.equal(missingScript.shellArgs[3]?.includes("%%"), false);
+  }
+
+  const unreadable = lookupCodexCommand(
+    shimPath,
+    ["%PATH%"],
+    "loginShell",
+    "win32",
+    { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+    (candidate) => candidate === shimPath,
+    () => {
+      throw new Error("denied");
+    },
+  );
+  assert.equal(unreadable.status, "cmdShim");
+  if (unreadable.status === "cmdShim") {
+    assert.equal(unreadable.shellArgs[3]?.includes("%%"), false);
+  }
+});
+
+function npmScript(shimPath: string): string {
+  return path.win32.normalize(
+    path.win32.join(
+      path.win32.dirname(shimPath),
+      "node_modules\\@openai\\codex\\bin\\codex.js",
+    ),
+  );
+}
 
 test("Windows profile mode lets the terminal shell resolve a bare name", () => {
   assert.deepEqual(

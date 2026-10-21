@@ -19,8 +19,12 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   including when the CLI is missing from the shell or not signed in.
 - Refuse to open a tab when the configured absolute path does not exist, or
   when Windows `loginShell` mode cannot resolve the command.
-- Launch Windows `.cmd` and `.bat` shims through `cmd.exe` with quoted,
-  percent-escaped arguments.
+- Launch a recognized npm Windows `.cmd` shim as `node.exe` plus its `.js`
+  entry, so arguments such as `%PATH%` are not expanded by `cmd.exe`.
+  Unrecognized `.cmd` and `.bat` files still use `cmd.exe /d /s /c`, which
+  can expand percent signs.
+- Report an immediate Unix PTY exit before VS Code closes the terminal, so
+  the tab stays open and the setup message is shown.
 - Apply a folder-specific `codexTabs.cwdMode` from the active file.
 - Discover Python 3 on `PATH` for the optional Unix PTY adapter.
 - Ask for a file or folder when Insert into Chat has no selection.

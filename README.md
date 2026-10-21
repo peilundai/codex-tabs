@@ -87,9 +87,11 @@ Example:
 
 - **macOS and Linux:** full support with Python 3 and Unix PTY modules.
 - **Windows:** editor tabs, group reuse, commands, and context-menu insertion.
-  `loginShell` launches a resolved `.exe` directly, or a `.cmd`/`.bat` shim
-  through `cmd.exe` with quoted arguments. Unix PTY title and drop integration
-  is unavailable.
+  `loginShell` launches a resolved `.exe` directly. A recognized npm `.cmd`
+  shim is started as `node.exe` and its `.js` entry, so arguments are not
+  passed through `cmd.exe`. Other `.cmd` and `.bat` shims still use
+  `cmd.exe /d /s /c`, which expands `%NAME%`. Unix PTY title and drop
+  integration is unavailable.
 - **Remote environments:** supported when Codex CLI and Python are installed in
   the remote extension host.
 - **Browser-only VS Code:** unsupported without a remote extension host.

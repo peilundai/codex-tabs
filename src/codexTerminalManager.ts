@@ -134,6 +134,7 @@ export class CodexTerminalManager implements vscode.Disposable {
       process.platform,
       process.env,
       isExistingFile,
+      readTextFile,
     );
     if (lookup.status === "missing") {
       await this.reportMissingCommand(configuration.command);
@@ -182,21 +183,34 @@ export class CodexTerminalManager implements vscode.Disposable {
 
     let terminal: vscode.Terminal;
     if (bridge) {
+      // `open()` starts the child immediately, but its exit is asynchronous.
+      // The holder is assigned before that exit, and the session is recorded
+      // before control returns to the event loop.
+      const launched: { terminal?: vscode.Terminal } = {};
+      const pty = new CodexPseudoterminal({
+        ...bridge,
+        cwd,
+        environment: terminalEnvironment({
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+        }),
+        titleMaxLength: configuration.titleMaxLength,
+        onProcessExit: (exitCode) => {
+          const current = launched.terminal;
+          if (!current) {
+            return "close";
+          }
+          return this.handlePtyExit(current, exitCode);
+        },
+      });
       terminal = vscode.window.createTerminal({
         name: EXTENSION_NAME,
-        pty: new CodexPseudoterminal({
-          ...bridge,
-          cwd,
-          environment: terminalEnvironment({
-            ...process.env,
-            PYTHONUNBUFFERED: "1",
-          }),
-          titleMaxLength: configuration.titleMaxLength,
-        }),
+        pty,
         iconPath,
         isTransient: true,
         location: { viewColumn, preserveFocus: false },
       });
+      launched.terminal = terminal;
     } else {
       const options: vscode.TerminalOptions = {
         name: EXTENSION_NAME,
@@ -445,9 +459,32 @@ export class CodexTerminalManager implements vscode.Disposable {
     }
   }
 
+  private handlePtyExit(
+    terminal: vscode.Terminal,
+    exitCode: number,
+  ): "keep" | "close" {
+    const session = this.sessions.get(terminal);
+    if (!session) {
+      return "close";
+    }
+    // Decide before `onDidClose`. That event removes the terminal and the
+    // `onDidCloseTerminal` listener deletes this session, so the reaper below
+    // never observes a pseudoterminal exit.
+    if (isImmediateFailure(exitCode, Date.now() - session.openedAt)) {
+      if (!session.failureNotified) {
+        session.failureNotified = true;
+        this.notifyImmediateExit(session.command, exitCode);
+      }
+      return "keep";
+    }
+    return "close";
+  }
+
   private disposeExitedTerminals(): void {
     for (const session of [...this.sessions.values()]) {
       const terminal = session.terminal;
+      // Native terminals stay listed with `exitStatus` until disposed.
+      // Pseudoterminal exits are handled in `handlePtyExit` instead.
       if (!vscode.window.terminals.includes(terminal) || !terminal.exitStatus) {
         continue;
       }
@@ -563,6 +600,10 @@ function isExistingFile(filePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+function readTextFile(filePath: string): string {
+  return fs.readFileSync(filePath, "utf8");
 }
 
 function activeResourcePath(): string | undefined {
