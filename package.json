@@ -1,8 +1,8 @@
 {
   "name": "codex-cli-tabs",
-  "displayName": "Codex CLI Tabs",
-  "description": "Open multiple independent Codex CLI sessions in focused VS Code editor tabs.",
-  "version": "0.2.4",
+  "displayName": "Codex CLI Tabs (unofficial)",
+  "description": "Unofficial extension for multiple independent Codex CLI sessions in editor tabs. Not affiliated with or endorsed by OpenAI.",
+  "version": "0.2.5",
   "publisher": "peilundai",
   "author": { "name": "Peilun Dai" },
   "license": "MIT",
@@ -12,7 +12,7 @@
   "pricing": "Free",
   "icon": "media/codex-icon-light.png",
   "galleryBanner": { "color": "#0d1117", "theme": "dark" },
-  "keywords": ["codex", "codex cli", "openai", "coding agent", "terminal", "chat", "tabs"],
+  "keywords": ["codex", "codex cli", "openai", "unofficial", "coding agent", "terminal", "chat", "tabs"],
   "engines": { "vscode": "^1.85.0" },
   "extensionKind": ["workspace"],
   "capabilities": {

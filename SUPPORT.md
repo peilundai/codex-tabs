@@ -9,3 +9,5 @@ output-channel logs. Remove private paths and secrets first.
 
 For Codex CLI authentication, models, permissions, sessions, or CLI behavior,
 use the [official Codex documentation](https://developers.openai.com/codex/cli/features).
+
+See [PRIVACY.md](PRIVACY.md) for what this extension does and does not collect.

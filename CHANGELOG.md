@@ -4,6 +4,32 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-21
+
+### Changed
+
+- Identify the extension as unofficial and not affiliated with OpenAI in the
+  Marketplace name and description.
+- Replace the Marketplace and editor-tab icons with original terminal-tab
+  artwork.
+
+### Fixed
+
+- Leave a tab open and explain the failure when Codex exits immediately,
+  including when the CLI is missing from the shell or not signed in.
+- Refuse to open a tab when the configured absolute path does not exist, or
+  when Windows `loginShell` mode cannot resolve the command.
+- Launch a recognized npm Windows `.cmd` shim as `node.exe` plus its `.js`
+  entry, so arguments such as `%PATH%` are not expanded by `cmd.exe`.
+  Unrecognized `.cmd` and `.bat` files still use `cmd.exe /d /s /c`, which
+  can expand percent signs.
+- Report an immediate Unix PTY exit before VS Code closes the terminal, so
+  the tab stays open and the setup message is shown.
+- Apply a folder-specific `codexTabs.cwdMode` from the active file.
+- Discover Python 3 on `PATH` for the optional Unix PTY adapter.
+- Ask for a file or folder when Insert into Chat has no selection.
+- Do not start a chat when no workspace or home directory is available.
+
 ## [0.2.4] - 2026-08-16
 
 ### Fixed
@@ -56,7 +82,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Automated tests, package validation, architecture documentation, and explicit
   workspace trust restrictions.
 
-[Unreleased]: https://github.com/peilundai/codex-tabs/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/peilundai/codex-tabs/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/peilundai/codex-tabs/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/peilundai/codex-tabs/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/peilundai/codex-tabs/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/peilundai/codex-tabs/compare/v0.2.1...v0.2.2

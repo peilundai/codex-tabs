@@ -18,6 +18,28 @@ const runtimePython = locatePythonWithPty({
     spawnSync(executable, [...args], { timeout: timeoutMilliseconds }),
 });
 
+test("Python discovery checks PATH after well-known locations", () => {
+  assert.equal(
+    locatePythonWithPty({
+      platform: "linux",
+      environment: { PATH: "/custom/bin:/usr/bin" },
+      exists: (candidate) => candidate === "/custom/bin/python3",
+      run: () => ({ status: 0 }),
+    }),
+    "/custom/bin/python3",
+  );
+  assert.equal(
+    locatePythonWithPty({
+      platform: "linux",
+      environment: { PATH: "/custom/bin" },
+      exists: (candidate) =>
+        candidate === "/usr/bin/python3" || candidate === "/custom/bin/python",
+      run: (executable) => ({ status: executable.endsWith("/python3") ? 0 : 1 }),
+    }),
+    "/usr/bin/python3",
+  );
+});
+
 test("Python discovery is disabled on Windows and bounded elsewhere", () => {
   assert.equal(
     locatePythonWithPty({

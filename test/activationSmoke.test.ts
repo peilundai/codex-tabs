@@ -38,6 +38,14 @@ test("activation registers all commands and live chats reuse one concrete group"
     | ((terminal: FakeTerminal | undefined) => void)
     | undefined;
   let closeTerminalListener: ((terminal: FakeTerminal) => void) | undefined;
+  let activeResource: { scheme: string; fsPath: string } | undefined = {
+    scheme: "file",
+    fsPath: "/tmp/readme.ts",
+  };
+  let configuredCommand = process.execPath;
+  const configurationResources: unknown[] = [];
+  const informationMessages: string[] = [];
+  const errorMessages: string[] = [];
 
   class FakeTabInputTerminal {}
 
@@ -52,7 +60,9 @@ test("activation registers all commands and live chats reuse one concrete group"
       return activeTerminal;
     },
     terminals,
-    activeTextEditor: undefined,
+    get activeTextEditor() {
+      return activeResource ? { document: { uri: activeResource } } : undefined;
+    },
     tabGroups: {
       activeTabGroup: activeGroup,
       all: [activeGroup],
@@ -101,9 +111,15 @@ test("activation registers all commands and live chats reuse one concrete group"
       terminals.push(terminal);
       return terminal;
     },
-    showInformationMessage: async () => undefined,
+    showInformationMessage: async (message: string) => {
+      informationMessages.push(message);
+      return undefined;
+    },
     showWarningMessage: async () => undefined,
-    showErrorMessage: async () => undefined,
+    showErrorMessage: async (message: string) => {
+      errorMessages.push(message);
+      return undefined;
+    },
     showQuickPick: async () => undefined,
   };
 
@@ -113,16 +129,19 @@ test("activation registers all commands and live chats reuse one concrete group"
       workspaceFolders: [
         { name: "workspace", uri: { scheme: "file", fsPath: "/tmp" } },
       ],
-      getConfiguration: () => ({
-        get: (key: string): unknown =>
-          ({
-            command: "/usr/bin/true",
-            args: [],
-            cwdMode: "auto",
-            launchMode: "loginShell",
-            titleMaxLength: 24,
-          })[key as "command"],
-      }),
+      getConfiguration: (_section: string, scope?: unknown) => {
+        configurationResources.push(scope);
+        return {
+          get: (key: string): unknown =>
+            ({
+              command: configuredCommand,
+              args: [],
+              cwdMode: "auto",
+              launchMode: "loginShell",
+              titleMaxLength: 24,
+            })[key as "command"],
+        };
+      },
       openNotebookDocument: async () => undefined,
     },
     commands: {
@@ -195,6 +214,17 @@ test("activation registers all commands and live chats reuse one concrete group"
 
     await registered.get("codexTabs.open")?.();
     assert.equal(terminals.length, 2, "Open Agent should reveal, not create");
+    assert.equal(configurationResources[0], activeResource);
+
+    activeResource = undefined;
+    await registered.get("codexTabs.insertPath")?.();
+    assert.match(informationMessages.at(-1) ?? "", /Select a file or folder/);
+
+    configuredCommand = "/no/such/codex-tabs-binary";
+    const beforeMissing = terminals.length;
+    await registered.get("codexTabs.newChat")?.();
+    assert.equal(terminals.length, beforeMissing);
+    assert.match(errorMessages.at(-1) ?? "", /could not find/i);
   } finally {
     for (const subscription of subscriptions.reverse()) {
       subscription.dispose();

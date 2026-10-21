@@ -2,7 +2,18 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { readConfiguration } from "./configuration";
-import { EXTENSION_NAME } from "./constants";
+import {
+  CODEX_SETUP_DOCS_URL,
+  EXTENSION_NAME,
+  OPEN_SETUP_DOCS_ACTION,
+} from "./constants";
+import {
+  applyCommandLookup,
+  immediateExitMessage,
+  isImmediateFailure,
+  lookupCodexCommand,
+  missingCommandMessage,
+} from "./launchDiagnostics";
 import { planDropInterception } from "./dropInterception";
 import {
   buildLaunchPlan,
@@ -31,6 +42,9 @@ interface CodexSession {
   cwd?: string;
   viewColumn: number;
   lastUsed: number;
+  openedAt: number;
+  command: string;
+  failureNotified?: boolean;
 }
 
 export class CodexTerminalManager implements vscode.Disposable {
@@ -111,20 +125,38 @@ export class CodexTerminalManager implements vscode.Disposable {
   }
 
   private async createSession(action: SessionAction = "new"): Promise<void> {
-    const configuration = readConfiguration();
+    const configuration = readConfiguration(this.configurationResource());
+    const args = sessionArguments(configuration.args, action);
+    const lookup = lookupCodexCommand(
+      configuration.command,
+      args,
+      configuration.launchMode,
+      process.platform,
+      process.env,
+      isExistingFile,
+      readTextFile,
+    );
+    if (lookup.status === "missing") {
+      await this.reportMissingCommand(configuration.command);
+      return;
+    }
+
     const cwd = await this.resolveWorkingDirectory(configuration.cwdMode);
     if (cwd === "cancelled") {
       return;
     }
 
     const python = this.pythonWithPty();
-    const launch = buildLaunchPlan(
-      {
-        ...configuration,
-        args: sessionArguments(configuration.args, action),
-      },
-      process.platform,
-      process.env,
+    const launch = applyCommandLookup(
+      buildLaunchPlan(
+        {
+          ...configuration,
+          args,
+        },
+        process.platform,
+        process.env,
+      ),
+      lookup,
     );
     const bridgeScript = this.context.asAbsolutePath("scripts/codex-pty-bridge.py");
     const bridge = python
@@ -151,21 +183,34 @@ export class CodexTerminalManager implements vscode.Disposable {
 
     let terminal: vscode.Terminal;
     if (bridge) {
+      // `open()` starts the child immediately, but its exit is asynchronous.
+      // The holder is assigned before that exit, and the session is recorded
+      // before control returns to the event loop.
+      const launched: { terminal?: vscode.Terminal } = {};
+      const pty = new CodexPseudoterminal({
+        ...bridge,
+        cwd,
+        environment: terminalEnvironment({
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+        }),
+        titleMaxLength: configuration.titleMaxLength,
+        onProcessExit: (exitCode) => {
+          const current = launched.terminal;
+          if (!current) {
+            return "close";
+          }
+          return this.handlePtyExit(current, exitCode);
+        },
+      });
       terminal = vscode.window.createTerminal({
         name: EXTENSION_NAME,
-        pty: new CodexPseudoterminal({
-          ...bridge,
-          cwd,
-          environment: terminalEnvironment({
-            ...process.env,
-            PYTHONUNBUFFERED: "1",
-          }),
-          titleMaxLength: configuration.titleMaxLength,
-        }),
+        pty,
         iconPath,
         isTransient: true,
         location: { viewColumn, preserveFocus: false },
       });
+      launched.terminal = terminal;
     } else {
       const options: vscode.TerminalOptions = {
         name: EXTENSION_NAME,
@@ -187,6 +232,8 @@ export class CodexTerminalManager implements vscode.Disposable {
       cwd,
       viewColumn,
       lastUsed: ++this.sequence,
+      openedAt: Date.now(),
+      command: configuration.command,
     };
     this.sessions.set(terminal, session);
     terminal.show(false);
@@ -275,6 +322,12 @@ export class CodexTerminalManager implements vscode.Disposable {
       void vscode.window.showInformationMessage("No Codex chat is open.");
       return;
     }
+    if (paths.length === 0) {
+      void vscode.window.showInformationMessage(
+        "Select a file or folder in the workspace to insert.",
+      );
+      return;
+    }
     const input = formatMentions(paths, session.cwd);
     if (!input) {
       return;
@@ -356,9 +409,9 @@ export class CodexTerminalManager implements vscode.Disposable {
     const choice = chooseWorkingDirectory(folders, activeResourcePath(), mode);
     if (choice.kind === "unavailable") {
       void vscode.window.showWarningMessage(
-        `${EXTENSION_NAME}: no workspace or home directory is available.`,
+        `${EXTENSION_NAME}: no workspace or home directory is available. The chat was not started.`,
       );
-      return undefined;
+      return "cancelled";
     }
     if (choice.kind === "path") {
       return choice.fsPath;
@@ -406,12 +459,77 @@ export class CodexTerminalManager implements vscode.Disposable {
     }
   }
 
-  private disposeExitedTerminals(): void {
-    for (const session of this.sessions.values()) {
-      if (vscode.window.terminals.includes(session.terminal) && session.terminal.exitStatus) {
-        session.terminal.dispose();
-      }
+  private handlePtyExit(
+    terminal: vscode.Terminal,
+    exitCode: number,
+  ): "keep" | "close" {
+    const session = this.sessions.get(terminal);
+    if (!session) {
+      return "close";
     }
+    // Decide before `onDidClose`. That event removes the terminal and the
+    // `onDidCloseTerminal` listener deletes this session, so the reaper below
+    // never observes a pseudoterminal exit.
+    if (isImmediateFailure(exitCode, Date.now() - session.openedAt)) {
+      if (!session.failureNotified) {
+        session.failureNotified = true;
+        this.notifyImmediateExit(session.command, exitCode);
+      }
+      return "keep";
+    }
+    return "close";
+  }
+
+  private disposeExitedTerminals(): void {
+    for (const session of [...this.sessions.values()]) {
+      const terminal = session.terminal;
+      // Native terminals stay listed with `exitStatus` until disposed.
+      // Pseudoterminal exits are handled in `handlePtyExit` instead.
+      if (!vscode.window.terminals.includes(terminal) || !terminal.exitStatus) {
+        continue;
+      }
+      const exitCode = terminal.exitStatus.code;
+      if (isImmediateFailure(exitCode, Date.now() - session.openedAt)) {
+        if (!session.failureNotified && typeof exitCode === "number") {
+          session.failureNotified = true;
+          this.notifyImmediateExit(session.command, exitCode);
+        }
+        continue;
+      }
+      terminal.dispose();
+    }
+  }
+
+  private configurationResource(): vscode.Uri | undefined {
+    const activeEditor = vscode.window.activeTextEditor?.document.uri;
+    if (activeEditor && resourceFsPath(activeEditor)) {
+      return activeEditor;
+    }
+    return resourceUri(vscode.window.tabGroups.activeTabGroup.activeTab);
+  }
+
+  private async reportMissingCommand(command: string): Promise<void> {
+    const message = missingCommandMessage(command);
+    this.output.appendLine(message);
+    const choice = await vscode.window.showErrorMessage(
+      message,
+      OPEN_SETUP_DOCS_ACTION,
+    );
+    if (choice === OPEN_SETUP_DOCS_ACTION) {
+      await vscode.env.openExternal(vscode.Uri.parse(CODEX_SETUP_DOCS_URL));
+    }
+  }
+
+  private notifyImmediateExit(command: string, exitCode: number): void {
+    const message = immediateExitMessage(command, exitCode);
+    this.output.appendLine(message);
+    void vscode.window
+      .showErrorMessage(message, OPEN_SETUP_DOCS_ACTION)
+      .then((choice) => {
+        if (choice === OPEN_SETUP_DOCS_ACTION) {
+          void vscode.env.openExternal(vscode.Uri.parse(CODEX_SETUP_DOCS_URL));
+        }
+      });
   }
 
   private reportError(context: string, error: unknown, notify: boolean): void {
@@ -474,6 +592,18 @@ async function restoreEditor(uri: vscode.Uri, restore: EditorRestore): Promise<v
   } else {
     await vscode.window.showTextDocument(uri, options);
   }
+}
+
+function isExistingFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function readTextFile(filePath: string): string {
+  return fs.readFileSync(filePath, "utf8");
 }
 
 function activeResourcePath(): string | undefined {

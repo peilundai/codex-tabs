@@ -6,9 +6,16 @@ extension-host details, a minimal reproduction, and expected impact. Do not
 include credentials or private source code.
 
 The extension launches the separately installed Codex executable with validated
-arguments and a selected working directory. Codex code execution,
-authentication, provider communication, and workspace modifications are outside
-this extension's security boundary.
+arguments and a selected working directory. On Windows, a resolved `.exe` is
+started directly. A recognized npm `.cmd` shim is read and replaced with
+`node.exe` plus that shim's `.js` entry, so arguments are not expanded by
+`cmd.exe`. An unrecognized `.cmd` or `.bat` file is started through
+`cmd.exe /d /s /c` with quoted arguments. That fallback still expands `%NAME%`
+environment references. Doubling `%` does not prevent it, because `cmd /c`
+receives a command line rather than batch source. Point `codexTabs.command`
+at the underlying executable when arguments must stay literal. Codex code
+execution, authentication, provider communication, and workspace modifications
+are outside this extension's security boundary.
 
 Extension-controlled surfaces are command construction, terminal lifecycle,
 path insertion, editor-tab movement, the Unix PTY adapter, and package contents.

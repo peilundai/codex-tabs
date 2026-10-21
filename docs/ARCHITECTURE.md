@@ -22,6 +22,7 @@ validate inputs, build immutable plans, or adapt one I/O boundary.
 | Module | Responsibility |
 | --- | --- |
 | `configuration.ts` | Validate settings and bounded defaults. |
+| `launchDiagnostics.ts` | Resolve Windows executables and classify startup failures. |
 | `workingDirectory.ts` | Select the workspace/home directory. |
 | `sessionLaunch.ts` | Place global arguments before `resume` or `fork`. |
 | `launch.ts` | Quote executable arguments and create platform launch plans. |
@@ -37,6 +38,13 @@ Only terminals created during the current extension-host lifetime are managed.
 The tabs themselves are transient; Codex CLI persists chat history and exposes
 the native `resume` and `fork` pickers.
 
+When the Python adapter exits, the pseudoterminal tells the manager before
+`onDidClose`. An immediate failure keeps the terminal open. Firing
+`onDidClose` first would remove the terminal, and the manager would delete
+the session before it could show the setup message. Disposal requested by
+VS Code is not treated as a startup failure. Native terminals still report
+the same failure through their `exitStatus`.
+
 For managed Unix terminals, Codex is given a process-local title layout that
 contains its app name, session UUID, and explicit thread name. Codex may shorten
 the UUID in this display surface. The bridge accepts only a validated full UUID
@@ -51,6 +59,17 @@ ambiguous identifiers, SQLite support, files, or schema fields degrade to
 requests only the app name.
 
 Configured executable and argument values are never interpreted as arbitrary
-shell syntax. POSIX values are quoted individually. Windows default mode
-launches the configured executable directly. The optional PTY adapter degrades
-to a native terminal when unavailable.
+shell syntax. POSIX values are quoted individually. Windows `loginShell` mode
+launches a resolved `.exe` directly. A recognized npm `.cmd` shim is not run
+through `cmd.exe`: the extension reads the shim and starts `node.exe` with
+the shim's `.js` entry and the original arguments as a direct argument vector.
+A value such as `%PATH%` therefore stays literal. The shim's batch preamble
+is not executed. A standard npm shim only uses that preamble to locate `node`
+and forward `%*`. An unrecognized `.cmd` or `.bat` file still starts with
+`cmd.exe /d /s /c` and quoted arguments. Doubling `%` is not used, because
+that escape applies to batch source and `cmd /c` still expands `%NAME%`.
+Point `codexTabs.command` at the underlying `.exe` or `.js` file when a
+custom shim must not expand arguments. The optional PTY adapter degrades to a
+native terminal when unavailable. A bare command that a Unix login shell or a
+terminal profile must resolve is not rejected in advance. An absolute path
+that does not exist is rejected before a tab opens.

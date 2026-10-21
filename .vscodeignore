@@ -9,6 +9,8 @@ CONTRIBUTING.md
 SECURITY.md
 AGENTS.md
 CLAUDE.md
+PUBLISH_AND_OPENSOURCE_REVIEW.md
+RESTORE_OPEN_CHATS_PLAN.md
 tsconfig.json
 tsconfig.test.json
 eslint.config.mjs
