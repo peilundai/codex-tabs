@@ -11,6 +11,7 @@ coverage/
 # Packaged extensions and npm artifacts
 *.vsix
 *.tgz
+artifacts/
 
 # Python cache and local environments
 __pycache__/

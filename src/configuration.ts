@@ -12,15 +12,31 @@ import type {
 const MINIMUM_TITLE_LENGTH = 8;
 const MAXIMUM_TITLE_LENGTH = 80;
 
-export function readConfiguration(): ExtensionConfiguration {
-  const config = vscode.workspace.getConfiguration(CONFIGURATION_SECTION);
+export function readConfiguration(resource?: vscode.Uri): ExtensionConfiguration {
+  const config = vscode.workspace.getConfiguration(CONFIGURATION_SECTION, resource);
+  return normalizeConfiguration({
+    command: config.get("command"),
+    args: config.get("args"),
+    cwdMode: config.get("cwdMode"),
+    launchMode: config.get("launchMode"),
+    titleMaxLength: config.get("titleMaxLength"),
+  });
+}
+
+export function normalizeConfiguration(values: {
+  command?: unknown;
+  args?: unknown;
+  cwdMode?: unknown;
+  launchMode?: unknown;
+  titleMaxLength?: unknown;
+}): ExtensionConfiguration {
   return {
-    command: nonEmptyString(config.get("command"), "codex"),
-    args: stringArray(config.get("args")),
-    cwdMode: cwdMode(config.get("cwdMode")),
-    launchMode: launchMode(config.get("launchMode")),
+    command: nonEmptyString(values.command, "codex"),
+    args: stringArray(values.args),
+    cwdMode: cwdMode(values.cwdMode),
+    launchMode: launchMode(values.launchMode),
     titleMaxLength: boundedInteger(
-      config.get("titleMaxLength"),
+      values.titleMaxLength,
       DEFAULT_TITLE_LENGTH,
       MINIMUM_TITLE_LENGTH,
       MAXIMUM_TITLE_LENGTH,
@@ -33,9 +49,12 @@ function nonEmptyString(value: unknown, fallback: string): string {
 }
 
 function stringArray(value: unknown): readonly string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (item): item is string => typeof item === "string" && item.trim().length > 0,
+  );
 }
 
 function cwdMode(value: unknown): CwdMode {

@@ -6,7 +6,9 @@ extension-host details, a minimal reproduction, and expected impact. Do not
 include credentials or private source code.
 
 The extension launches the separately installed Codex executable with validated
-arguments and a selected working directory. Codex code execution,
+arguments and a selected working directory. On Windows, a `.cmd` or `.bat`
+shim is started through `cmd.exe /d /s /c`. Arguments are quoted and `%` is
+escaped so the shim does not expand environment variables. Codex code execution,
 authentication, provider communication, and workspace modifications are outside
 this extension's security boundary.
 

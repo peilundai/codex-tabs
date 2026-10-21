@@ -1,130 +1,75 @@
 # Publish and open-source review
 
-Status: snapshot of remaining work before Marketplace/Open VSX
-publication and a public source repository. Not a feature spec.
+Status: updated for the 0.2.5 release-readiness branch. Not a feature spec.
+Do not publish, tag, or make the repository public until Peilun approves.
 
-The extension is already in publishable *shape* (MIT license, README,
-CHANGELOG, CI, packaging, no telemetry). What is still missing is
-mostly **legal rights to the Codex artwork**, a **public GitHub repo**,
-and **Marketplace/Open VSX publisher setup**. Restore-after-reload is a
-later feature, not a ship blocker.
+## Done in 0.2.5
 
-## What will actually stop you
+- Original Marketplace and tab icons replace the OpenAI Codex app artwork in
+  the current tree.
+- Marketplace `displayName` and `description` say the extension is unofficial
+  and not affiliated with OpenAI.
+- Tracked `artifacts/*.zip` archives are removed from the branch and ignored.
+- `PUBLISH_AND_OPENSOURCE_REVIEW.md` and `RESTORE_OPEN_CHATS_PLAN.md` stay in
+  git and are excluded from the VSIX.
+- `PRIVACY.md` is the text to use for the Marketplace privacy-policy URL.
+- A missing absolute command, an unresolved Windows `loginShell` command, and
+  an immediate Codex exit are reported in the editor. Sign-in itself stays
+  inside Codex CLI.
 
-### 1. Official Codex artwork (highest risk for both)
+## Still required before a listing
 
-`NOTICE` says the Marketplace and tab icons come from the official
-Codex app. Those files are in `media/` and would go out under MIT.
+### Git history still contains the old artwork
 
-That is the one issue that can get a listing rejected, taken down, or
-make an MIT repo legally inconsistent:
+Replacing the PNGs does not remove them from earlier commits, and the deleted
+source zips are still in history. A public copy of this history would still
+contain OpenAI's icon. If that matters, start the public repository from a
+fresh root commit or rewrite history before the first public push. This branch
+does not rewrite history.
 
-- You cannot grant MIT rights to artwork you do not own.
-- OpenAI’s brand rules disallow using their marks as your product
-  branding.
-- The Marketplace publisher agreement forbids listing icons/trademarks
-  you are not allowed to use.
+### LICENSE detection
 
-The name **Codex CLI Tabs** plus the unaffiliated disclaimer is
-ordinary compatibility naming. Shipping OpenAI’s cloud mark as *your*
-extension icon is a different problem.
+`package.json` declares MIT, and `LICENSE` is the MIT text plus one trademark
+paragraph. GitHub can classify that file as "Other" because of the extra
+paragraph. The license choice was left unchanged on purpose. `NOTICE` carries
+the same trademark clarification.
 
-**Before publish or a public repo:** replace those PNGs with original
-artwork, and keep Codex/OpenAI names as text only. Keep the disclaimer
-in README/`NOTICE`.
+### Publisher and repository
 
-This is not legal advice. The icon/trademark point is the one not to
-ship around.
-
-### 2. The GitHub repo does not exist yet
-
-`package.json` already points at
-`https://github.com/peilundai/codex-tabs`, but:
-
-- there is no git remote
-- `peilundai/codex-tabs` 404s
-- Marketplace listing `peilundai.codex-cli-tabs` does not exist
-- `vsce` has no local publisher login
-
-README, CHANGELOG version links, issue tracker, and `SECURITY.md`
-(private advisories) all assume that repo is live.
-
-Create the public repo first, then publish, so Marketplace
-“Repository / Issues / License” links work on day one.
-
-### 3. Repo hygiene before it goes public
-
-Do this before the first push:
-
-- **Remove `artifacts/` from git.** Two source/VSIX zips are tracked.
-  They are build products, and the 0.2.0 source zip still contains
-  `docs/superpowers/` that is not in the current tree.
-- **Keep `RESTORE_OPEN_CHATS_PLAN.md` out of the VSIX.** It is
-  untracked, but `vsce ls` currently includes it. Add it to
-  `.gitignore` / `.vscodeignore` (or delete it) before packaging.
-- **Ignore `artifacts/` and `*.vsix` in git** (VSIX at the repo root is
-  already ignored).
-- Decide whether to keep any uncommitted PTY-bridge work; do not
-  publish a dirty or accidental planning-doc package.
-
-Git history is only two commits, which is a good time to go public.
-
-## Open-sourcing checklist
-
-Already in good shape: MIT `LICENSE`, `NOTICE`, README, CONTRIBUTING,
-SECURITY, SUPPORT, architecture doc, tests, GitHub Actions CI.
-
-Still to do:
-
-| Item | Why |
-| --- | --- |
-| Create `peilundai/codex-tabs` and `git remote add origin` | Manifest/docs already assume it |
-| Push, then tag `v0.2.4` (and earlier versions if you want the CHANGELOG links to resolve) | CHANGELOG compare URLs 404 today |
-| Enable private vulnerability reporting | `SECURITY.md` tells people to use it |
-| Add a short `PRIVACY.md` | “No telemetry; Codex CLI has its own terms” |
-| Optional: `CODE_OF_CONDUCT.md`, issue templates | GitHub community defaults, not required |
-| Accept that `peilun.dai@gmail.com` is in commit history | It becomes public with the repo |
-| Fix LICENSE/SPDX mismatch if you care about GitHub’s MIT badge | Extra paragraph after the MIT text can keep GitHub from auto-detecting MIT; the trademark clarification belongs in `NOTICE` |
-
-You do **not** need restore-open-chats, a CLA, or extra runtime
-dependencies.
-
-## Marketplace / Open VSX checklist
-
-Product/docs for a 0.2.x listing are largely ready: unique
-`publisher`/`name`, icon size (1024² PNG), categories including
-`Chat`, trust/virtual-workspace flags, no network/telemetry in this
-extension.
-
-Still to do:
+The repository `peilundai/codex-tabs` exists and is private. Marketplace
+listing links, changelog compare URLs, and the privacy-policy URL below will
+not work for the public until the repository is public. Do not flip that
+visibility as part of packaging.
 
 1. Create a Visual Studio Marketplace publisher whose ID is exactly
    `peilundai`.
 2. Sign the Marketplace Publisher Agreement.
-3. Publish with `vsce publish` (PAT with Marketplace **Manage**, or
-   Entra ID). First upload is virus-scanned and can lag.
-4. In listing metadata, set **Privacy policy** (even a “we collect
-   nothing” page), and keep Support pointing at GitHub issues.
-5. Optional: Open VSX (`ovsx publish`) if you want Cursor / VSCodium
-   users without sideloading a VSIX.
-6. Optional README screenshots — listing quality, not a hard gate.
-7. Verified publisher badge is **not** available yet (needs ~6 months
-   on Marketplace).
+3. Publish with `vsce publish` (PAT with Marketplace **Manage** scope, or
+   Entra ID). The first upload is virus-scanned and can lag.
+4. In the listing, set the privacy policy to
+   `https://github.com/peilundai/codex-tabs/blob/main/PRIVACY.md`
+   and keep Support pointing at GitHub issues.
+5. Optional: `ovsx publish` for Cursor and VSCodium users.
+6. The verified-publisher badge is not available until the publisher has been
+   on the Marketplace for the required period.
 
-## Suggested order
+Restore-after-reload remains the plan in `RESTORE_OPEN_CHATS_PLAN.md`. It is
+not a ship blocker.
 
-1. Swap in original icons; keep the unofficial disclaimer.
-2. Drop `artifacts/` from git; stop packaging the restore plan.
-3. Create the public GitHub repo, push, tag `v0.2.4`, turn on private
-   security advisories.
-4. Add `PRIVACY.md`.
-5. Run:
+## Suggested publish commands
 
-   ```bash
-   npm ci
-   npm run check
-   npm run package
-   npx vsce ls --no-dependencies
-   ```
+Run these only after the repository is public, the publisher account exists,
+and Peilun has approved the release. Do not tag or publish from this branch
+automatically.
 
-6. `vsce publish` (then Open VSX if you want it).
+```bash
+npm ci
+npm run check
+npm run package
+npx vsce ls --no-dependencies
+npx vsce publish
+npx ovsx publish -p "$OVSX_PAT"
+```
+
+`vsce package` writes `codex-cli-tabs-<version>.vsix` and does not upload it.
+`vsce publish` and `ovsx publish` do.

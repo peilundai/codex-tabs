@@ -22,6 +22,7 @@ validate inputs, build immutable plans, or adapt one I/O boundary.
 | Module | Responsibility |
 | --- | --- |
 | `configuration.ts` | Validate settings and bounded defaults. |
+| `launchDiagnostics.ts` | Resolve Windows executables and classify startup failures. |
 | `workingDirectory.ts` | Select the workspace/home directory. |
 | `sessionLaunch.ts` | Place global arguments before `resume` or `fork`. |
 | `launch.ts` | Quote executable arguments and create platform launch plans. |
@@ -51,6 +52,10 @@ ambiguous identifiers, SQLite support, files, or schema fields degrade to
 requests only the app name.
 
 Configured executable and argument values are never interpreted as arbitrary
-shell syntax. POSIX values are quoted individually. Windows default mode
-launches the configured executable directly. The optional PTY adapter degrades
-to a native terminal when unavailable.
+shell syntax. POSIX values are quoted individually. Windows `loginShell` mode
+launches a resolved `.exe` directly. A `.cmd` or `.bat` shim is started with
+`cmd.exe /d /s /c` and percent-escaped quoted arguments, so environment
+variables are not expanded. The optional PTY adapter degrades to a native
+terminal when unavailable. A bare command that a Unix login shell or a
+terminal profile must resolve is not rejected in advance. An absolute path
+that does not exist is rejected before a tab opens.

@@ -31,7 +31,13 @@ export function locatePythonWithPty(probe: PythonProbe): string | undefined {
   const configured = [probe.environment.PYTHON3, probe.environment.PYTHON].filter(
     (value): value is string => Boolean(value),
   );
-  const candidates = [...new Set([...configured, ...COMMON_PYTHON_LOCATIONS])];
+  const candidates = [
+    ...new Set([
+      ...configured,
+      ...COMMON_PYTHON_LOCATIONS,
+      ...pythonCandidatesOnPath(probe.environment),
+    ]),
+  ];
   for (const candidate of candidates) {
     if (!probe.exists(candidate)) {
       continue;
@@ -50,6 +56,20 @@ export function locatePythonWithPty(probe: PythonProbe): string | undefined {
     }
   }
   return undefined;
+}
+
+function pythonCandidatesOnPath(environment: NodeJS.Dict<string>): readonly string[] {
+  const directories = (environment.PATH ?? "")
+    .split(":")
+    .filter((entry) => entry.length > 0);
+  const candidates: string[] = [];
+  for (const name of ["python3", "python"]) {
+    for (const directory of directories) {
+      const trimmed = directory.endsWith("/") ? directory.slice(0, -1) : directory;
+      candidates.push(`${trimmed}/${name}`);
+    }
+  }
+  return candidates;
 }
 
 export function buildBridgeLaunch(

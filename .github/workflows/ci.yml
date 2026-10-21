@@ -39,8 +39,25 @@ jobs:
       - name: Reject development files in VSIX
         shell: bash
         run: |
-          if unzip -Z1 codex-cli-tabs-*.vsix | grep -E '/(src|test|reference|\.github)/'; then
+          files="$(unzip -Z1 codex-cli-tabs-*.vsix)"
+          if printf '%s\n' "$files" | grep -E '/(src|test|reference|\.github)/|PUBLISH_AND_OPENSOURCE_REVIEW|RESTORE_OPEN_CHATS_PLAN|(^|/)artifacts/'; then
             echo "Development-only files were packaged" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$files" | grep -q 'extension/scripts/codex-pty-bridge.py'; then
+            echo "PTY bridge was not packaged" >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$files" | grep -q 'extension/PRIVACY.md'; then
+            echo "Privacy policy was not packaged" >&2
+            exit 1
+          fi
+          if unzip -l codex-cli-tabs-*.vsix | awk '
+            $0 ~ /----/ { separators++; next }
+            separators == 1 && $1+0 > 500000 { print; bad=1 }
+            END { exit bad+0 }
+          '; then
+            echo "A packaged file exceeds 500KB" >&2
             exit 1
           fi
 
