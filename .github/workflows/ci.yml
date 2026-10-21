@@ -14,11 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -27,10 +27,10 @@ jobs:
 
   package:
     name: Package audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -39,25 +39,48 @@ jobs:
       - name: Reject development files in VSIX
         shell: bash
         run: |
-          files="$(unzip -Z1 codex-cli-tabs-*.vsix)"
-          if printf '%s\n' "$files" | grep -E '/(src|test|reference|\.github)/|PUBLISH_AND_OPENSOURCE_REVIEW|RESTORE_OPEN_CHATS_PLAN|(^|/)artifacts/'; then
-            echo "Development-only files were packaged" >&2
-            exit 1
-          fi
-          if ! printf '%s\n' "$files" | grep -q 'extension/scripts/codex-pty-bridge.py'; then
-            echo "PTY bridge was not packaged" >&2
-            exit 1
-          fi
-          if ! printf '%s\n' "$files" | grep -q 'extension/PRIVACY.md'; then
-            echo "Privacy policy was not packaged" >&2
-            exit 1
-          fi
-          if unzip -l codex-cli-tabs-*.vsix | awk '
-            $0 ~ /----/ { separators++; next }
-            separators == 1 && $1+0 > 500000 { print; bad=1 }
-            END { exit bad+0 }
-          '; then
-            echo "A packaged file exceeds 500KB" >&2
-            exit 1
-          fi
+          python3 - << 'PY'
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          archives = sorted(Path(".").glob("codex-cli-tabs-*.vsix"))
+          if len(archives) != 1:
+              print(f"Expected one VSIX, found: {archives}", file=sys.stderr)
+              sys.exit(1)
+
+          required = {
+              "extension/scripts/codex-pty-bridge.py",
+              "extension/PRIVACY.md",
+          }
+          forbidden_markers = (
+              "/src/",
+              "/test/",
+              "/reference/",
+              "/.github/",
+              "/artifacts/",
+              "PUBLISH_AND_OPENSOURCE_REVIEW",
+              "RESTORE_OPEN_CHATS_PLAN",
+          )
+          max_bytes = 500_000
+
+          with zipfile.ZipFile(archives[0]) as package:
+              names = {info.filename for info in package.infolist()}
+              missing = sorted(required - names)
+              if missing:
+                  print("Required package files are missing:", file=sys.stderr)
+                  print("\n".join(missing), file=sys.stderr)
+                  sys.exit(1)
+              for info in package.infolist():
+                  path = f"/{info.filename}"
+                  if any(marker in path for marker in forbidden_markers):
+                      print(f"Development-only file was packaged: {info.filename}", file=sys.stderr)
+                      sys.exit(1)
+                  if info.file_size > max_bytes:
+                      print(
+                          f"Packaged file exceeds 500KB: {info.filename} ({info.file_size} bytes)",
+                          file=sys.stderr,
+                      )
+                      sys.exit(1)
+          PY
 
